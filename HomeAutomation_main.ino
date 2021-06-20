@@ -1,4 +1,5 @@
 #include <SPI.h>
+#include <stdlib.h>
 #include <Ethernet.h>
 #include <PubSubClient.h>
 
@@ -28,17 +29,19 @@ void callback(char* topic, byte* payload, unsigned int length) {
     Serial.print((char)payload[i]);
   }
   Serial.println();
-}
+  }
+  
+
 
 void setup() {
+      Serial.begin(9600); // Start serial port 
 ////////////////////////////////////////////
  mqttClient.setClient(ethClient);
  mqttClient.setServer("broker.hivemq.com",1883);
  mqttClient.setCallback(callback);
- mqttClient.subscribe("lcabs1993/arduino");
 ////////////////////////////////////////////
   
-    Serial.begin(9600); // Start serial port 
+
   // start the Ethernet connection:
   Serial.println("Initializing Ethernet with DHCP...");
   if (Ethernet.begin(mac) == 0) {
@@ -62,18 +65,28 @@ setupLED();
 sendData();
 
 
-
+ mqttClient.subscribe("lcabs1993");
+ mqttClient.subscribe("lcabs1993/arduino");
+ mqttClient.subscribe("lcabs1993/arduino/dht11/temp");
+ mqttClient.subscribe("lcabs1993/arduino/dht11/humidade");
+ mqttClient.subscribe("lcabs1993/led");
 }
 ////////////////////////////////////////////
 
 void loop() {
 mqttClient.loop();
-readPushbutton();
+readPushbutton(); //faz a leitura do estado do botão
+//pubPushbutton(); //TODO: se mudou, printa nova timestamp
+//readDHT11(); //TODO: checa se mudou temperatura e humidade
+//pubDHT11(); //TODO: se mudou, publica nova temperatura e nova humidade
+//atualizaOLED(); //TODO: atualiza OLED com novos valores
+
+ delay(1000);
 }
 
 void sendData(){ 
     char msgBuffer[20];
-      if(mqttClient.connect(CLIENT_ID)) {
+   if(mqttClient.connect(CLIENT_ID)) {
    mqttClient.publish("lcabs1993/arduino", "Arduino on!");
    mqttClient.publish("lcabs1993/arduino/dht11/temp", "XX °C");
    mqttClient.publish("lcabs1993/arduino/dht11/humidade", "XX %");
@@ -117,5 +130,3 @@ void setupLED(){
   int pin;
   pinMode(pin, OUTPUT);
 }
-
-

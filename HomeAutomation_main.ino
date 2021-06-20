@@ -2,10 +2,19 @@
 #include <stdlib.h>
 #include <Ethernet.h>
 #include <PubSubClient.h>
+#include <dht.h>
+
+dht DHT;
+
+int temp = 1;
+int humi = 2; 
 
 #define CLIENT_ID "Arduino"
 #define BUZZER_PIN 53
 #define LED_PIN 51
+#define DHT11_PIN 49
+
+///////////////////////////////////////////////////////////////////////DEFINES/////////
 
 // Function prototypes
 void callback(char* topic, byte* payload, unsigned int length);
@@ -31,8 +40,12 @@ void callback(char* topic, byte* payload, unsigned int length) {
   Serial.println();
   }
   
+void setupLED(){
+  int pin;
+  pinMode(pin, OUTPUT);
+}
 
-
+////////////////////////////////////////////////////////////////////////////////SETUP/////
 void setup() {
       Serial.begin(9600); // Start serial port 
 ////////////////////////////////////////////
@@ -40,8 +53,6 @@ void setup() {
  mqttClient.setServer("broker.hivemq.com",1883);
  mqttClient.setCallback(callback);
 ////////////////////////////////////////////
-  
-
   // start the Ethernet connection:
   Serial.println("Initializing Ethernet with DHCP...");
   if (Ethernet.begin(mac) == 0) {
@@ -59,29 +70,43 @@ void setup() {
   // print your local IP address:
   Serial.print("My IP address: ");
   Serial.println(Ethernet.localIP());
-
+///////////////////////////////////////////////
 setupBuzzer(BUZZER_PIN);
 setupLED();
 sendData();
 
-
  mqttClient.subscribe("lcabs1993");
  mqttClient.subscribe("lcabs1993/arduino");
+ mqttClient.subscribe("lcabs1993/arduino/buzzer");
+ mqttClient.subscribe("lcabs1993/arduino/led");
  mqttClient.subscribe("lcabs1993/arduino/dht11/temp");
  mqttClient.subscribe("lcabs1993/arduino/dht11/humidade");
- mqttClient.subscribe("lcabs1993/led");
+
 }
-////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////LOOP/////
 
 void loop() {
 mqttClient.loop();
-readPushbutton(); //faz a leitura do estado do botão
+readPushbutton(); //reads Pushbutton
+int dht[2] ;
+//readDHT11(temp,humi); // faz a leitura do DHT11
+  int chk = DHT.read11(DHT11_PIN);  //reads DHT11
+  int lasttemp =0;              //initialize buffers for last state
+  int lasthumi =0;
+  temp = DHT.temperature;     // reads current state
+  humi = DHT.humidity;  
+  Serial.print("Temp: ");     //prints to serial
+  Serial.println(temp);
+  Serial.print("Humi: "); 
+  Serial.println(humi);
+  char msgbuffer[10];         //initializes a message buffer
+  mqttClient.publish("lcabs1993/arduino/dht11/temp",itoa(temp, msgbuffer, 10));   //publishes DHT11 data to hiveMQ
+  mqttClient.publish("lcabs1993/arduino/dht11/humidade",itoa(humi, msgbuffer, 10));
 //pubPushbutton(); //TODO: se mudou, printa nova timestamp
 //readDHT11(); //TODO: checa se mudou temperatura e humidade
 //pubDHT11(); //TODO: se mudou, publica nova temperatura e nova humidade
 //atualizaOLED(); //TODO: atualiza OLED com novos valores
-
- delay(1000);
+ delay(2000); //wait two seconds
 }
 
 void sendData(){ 
@@ -91,7 +116,6 @@ void sendData(){
    mqttClient.publish("lcabs1993/arduino/dht11/temp", "XX °C");
    mqttClient.publish("lcabs1993/arduino/dht11/humidade", "XX %");
  }
-  
   }
 
 void setupBuzzer(int pin){
@@ -124,9 +148,4 @@ int lastButtonState = 0;     // previous state of the button
     delay(50);
   }
     lastButtonState = buttonState;
-}
-
-void setupLED(){
-  int pin;
-  pinMode(pin, OUTPUT);
 }

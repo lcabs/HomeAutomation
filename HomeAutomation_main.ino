@@ -6,7 +6,6 @@
 
 dht DHT;
 
-
 #define CLIENT_ID "Arduino"
 #define BUZZER_PIN 53
 #define LED_PIN 51
@@ -16,9 +15,8 @@ dht DHT;
 #define PIR01_PIN 6
 #define PIR01_GND 5
 
-
-int lasttemp = 11;              //initialize buffers for last state
-int lasthumi = 10;
+int lasttemp = 11;              //initialize variable for last temperature
+int lasthumi = 10;              //initialize variable for last humidity
 int temp = 1;
 int humi = 2; 
 long lastReconnectAttempt = 0;
@@ -35,19 +33,12 @@ int lastPIR01State = 0;     // previous state of the button
 
 // Function prototypes
 void callback(char* topic, byte* payload, unsigned int length);
-
 void setupBuzzer(int pin);
-
 void subscribeToAll();
-
 void readDHT11();
-
 void setupPushbutton(int pin);
-
 void pubPushbutton();
-
 void pubPIR01();
-
 boolean reconnect();
 
 byte mac[] = {
@@ -206,7 +197,6 @@ void pubPIR01(){
       Serial.println("off");
       mqttClient.publish("lcabs1993/arduino/PIR01","off");
     }
-
   }
     lastPIR01State = PIR01State;
   }
@@ -214,10 +204,8 @@ void pubPIR01(){
 
 boolean reconnect() {
   if (mqttClient.connect(CLIENT_ID)) {
-    // Once connected, publish an announcement...
-    mqttClient.publish("lcabs1993/arduino","Hello world!");
-    // ... and resubscribe
-    mqttClient.subscribe("lcabs1993");
+    mqttClient.publish("lcabs1993/arduino","Hello world!");     // Once connected, publish an announcement...
+    subscribeToAll();                                           // ... and subscribe
   }
   return mqttClient.connected();
 }
@@ -229,4 +217,5 @@ void subscribeToAll(){
  mqttClient.subscribe("lcabs1993/arduino/led");
  mqttClient.subscribe("lcabs1993/arduino/dht11/temp");
  mqttClient.subscribe("lcabs1993/arduino/dht11/humidade");
+ mqttClient.subscribe("lcabs1993/arduino/PIR01");
 }

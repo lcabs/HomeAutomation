@@ -12,6 +12,9 @@ dht DHT;
 #define LED_PIN 51
 #define DHT11_PIN 49
 #define PUSHBUTTON_PIN 47
+#define PIR01_VCC 7
+#define PIR01_PIN 6
+#define PIR01_GND 5
 
 
 int lasttemp = 11;              //initialize buffers for last state
@@ -24,7 +27,10 @@ int buttonPushCounter = 0;   // counter for the number of button presses
 int buttonState = 0;         // current state of the button
 int lastButtonState = 0;     // previous state of the button
 
-
+const int  PIR01Pin = PIR01_PIN;    // the pin that the pushbutton is attached to
+int PIR01Counter = 0;   // counter for the number of button presses
+int PIR01State = 0;         // current state of the button
+int lastPIR01State = 0;     // previous state of the button
 ///////////////////////////////////////////////////////////////////////DEFINES/////////
 
 // Function prototypes
@@ -39,6 +45,8 @@ void readDHT11();
 void setupPushbutton(int pin);
 
 void pubPushbutton();
+
+void pubPIR01();
 
 boolean reconnect();
 
@@ -69,6 +77,11 @@ void setupLED(){
 ////////////////////////////////////////////////////////////////////////////////SETUP/////
 void setup() {
       Serial.begin(9600); // Start serial port 
+      pinMode(PIR01_VCC,OUTPUT);
+      pinMode(PIR01_GND,OUTPUT);
+      digitalWrite(PIR01_VCC,HIGH);
+      digitalWrite(PIR01_GND,LOW);
+      pinMode(PIR01_PIN,INPUT);
       lastReconnectAttempt = 0;
 ////////////////////////////////////////////
  mqttClient.setClient(ethClient);
@@ -102,12 +115,10 @@ subscribeToAll();
 
 void loop() {
 mqttClient.loop();
-//pubPushbutton(); //reads Pushbutton
 readDHT11();
-
 pubPushbutton(); //TODO: se mudou, printa nova timestamp
-//readDHT11(); //TODO: checa se mudou temperatura e humidade
-//pubDHT11(); //TODO: se mudou, publica nova temperatura e nova humidade
+pubPIR01();
+
 //atualizaOLED(); //TODO: atualiza OLED com novos valores
 delay(500);
   if (!mqttClient.connected()) {
@@ -165,18 +176,41 @@ void pubPushbutton(){
       buttonPushCounter++;
       Serial.println("on");
       mqttClient.publish("lcabs1993/arduino","on");
-      Serial.print("number of button pushes: ");
+      Serial.print("number of button pushes since last on: ");
       Serial.println(buttonPushCounter);
     } else {
       // if the current state is LOW then the button went from on to off:
       Serial.println("off");
       mqttClient.publish("lcabs1993/arduino","off");
     }
-    // Delay a little bit to avoid bouncing
-    delay(50);
+
   }
     lastButtonState = buttonState;
 }
+
+void pubPIR01(){
+    // read the pushbutton input pin:
+  PIR01State = digitalRead(PIR01_PIN);
+  // compare the buttonState to its previous state
+  if (PIR01State != lastPIR01State) {
+    // if the state has changed, increment the counter
+    if (PIR01State == HIGH) {
+      // if the current state is HIGH then the button went from off to on:
+      PIR01Counter++;
+      Serial.println("on");
+      mqttClient.publish("lcabs1993/arduino/PIR01","on");
+      Serial.print("number of PIR01 pushes since last on: ");
+      Serial.println(PIR01Counter);
+    } else {
+      // if the current state is LOW then the button went from on to off:
+      Serial.println("off");
+      mqttClient.publish("lcabs1993/arduino/PIR01","off");
+    }
+
+  }
+    lastPIR01State = PIR01State;
+  }
+
 
 boolean reconnect() {
   if (mqttClient.connect(CLIENT_ID)) {

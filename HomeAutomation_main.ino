@@ -6,16 +6,24 @@
 
 dht DHT;
 
-int lasttemp = 11;              //initialize buffers for last state
-int lasthumi = 10;
-int temp = 1;
-int humi = 2; 
-long lastReconnectAttempt = 0;
 
 #define CLIENT_ID "Arduino"
 #define BUZZER_PIN 53
 #define LED_PIN 51
 #define DHT11_PIN 49
+#define PUSHBUTTON_PIN 47
+
+
+int lasttemp = 11;              //initialize buffers for last state
+int lasthumi = 10;
+int temp = 1;
+int humi = 2; 
+long lastReconnectAttempt = 0;
+const int  buttonPin = PUSHBUTTON_PIN;    // the pin that the pushbutton is attached to
+int buttonPushCounter = 0;   // counter for the number of button presses
+int buttonState = 0;         // current state of the button
+int lastButtonState = 0;     // previous state of the button
+
 
 ///////////////////////////////////////////////////////////////////////DEFINES/////////
 
@@ -29,6 +37,8 @@ void subscribeToAll();
 void readDHT11();
 
 void setupPushbutton(int pin);
+
+void pubPushbutton();
 
 boolean reconnect();
 
@@ -92,10 +102,10 @@ subscribeToAll();
 
 void loop() {
 mqttClient.loop();
-//readPushbutton(); //reads Pushbutton
+//pubPushbutton(); //reads Pushbutton
 readDHT11();
-  //readDHT11(temp,humi); // faz a leitura do DHT11
-//pubPushbutton(); //TODO: se mudou, printa nova timestamp
+
+pubPushbutton(); //TODO: se mudou, printa nova timestamp
 //readDHT11(); //TODO: checa se mudou temperatura e humidade
 //pubDHT11(); //TODO: se mudou, publica nova temperatura e nova humidade
 //atualizaOLED(); //TODO: atualiza OLED com novos valores
@@ -111,32 +121,22 @@ delay(500);
       }
     }
   } else {
-    // Client connected
-
-    mqttClient.loop();
+    mqttClient.loop();      // Client connected
   }
-
-
-
- 
 }
-
 
 void readDHT11(){
   int dht[2] ;
   int chk = DHT.read11(DHT11_PIN);  //reads DHT11
-
   temp = DHT.temperature;     // reads current state
   humi = DHT.humidity;  
-
-
   if (temp == lasttemp){  
     } else {
   char msgbuffer[10];         //initializes a message buffer 
   mqttClient.publish("lcabs1993/arduino/dht11/temp",itoa(temp, msgbuffer, 10));   //publishes DHT11 data to hiveMQ
   Serial.print("Temp: ");     //prints to serial
   Serial.println(temp);
-    Serial.print("Last Temp: ");     //prints to serial
+  Serial.print("Last Temp: ");     //prints to serial
   Serial.println(lasttemp);
       }
   if (humi == lasthumi){
@@ -148,18 +148,13 @@ void readDHT11(){
     }
   lasttemp = temp;
   lasthumi = humi;
-
 }
 
 void setupBuzzer(int pin){
   pinMode(pin, OUTPUT);
 }
 
-void readPushbutton(){
-const int  buttonPin = 7;    // the pin that the pushbutton is attached to
-int buttonPushCounter = 0;   // counter for the number of button presses
-int buttonState = 0;         // current state of the button
-int lastButtonState = 0;     // previous state of the button
+void pubPushbutton(){
   // read the pushbutton input pin:
   buttonState = digitalRead(buttonPin);
   // compare the buttonState to its previous state

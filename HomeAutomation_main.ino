@@ -2,23 +2,23 @@
 #include <stdlib.h>
 #include <Ethernet.h>
 #include <PubSubClient.h>
-#include <dht.h>
+//#include <dht.h>
 
-dht DHT;
+//dht DHT;
 
 #define CLIENT_ID "Arduino"
 #define BUZZER_PIN 53
 #define LED_PIN 51
-#define DHT11_PIN 49
+//#define DHT11_PIN 49
 #define PUSHBUTTON_PIN 47
 #define PIR01_VCC 7
 #define PIR01_PIN 6
 #define PIR01_GND 5
 
-int lasttemp = 11;              //initialize variable for last temperature
-int lasthumi = 10;              //initialize variable for last humidity
-int temp = 1;
-int humi = 2; 
+//int lasttemp = 11;              //initialize variable for last temperature
+//int lasthumi = 10;              //initialize variable for last humidity
+//int temp = 1;
+//int humi = 2; 
 long lastReconnectAttempt = 0;
 const int  buttonPin = PUSHBUTTON_PIN;    // the pin that the pushbutton is attached to
 int buttonPushCounter = 0;   // counter for the number of button presses
@@ -35,7 +35,7 @@ int lastPIR01State = 0;     // previous state of the button
 void callback(char* topic, byte* payload, unsigned int length);
 void setupBuzzer(int pin);
 void subscribeToAll();
-void readDHT11();
+//void readDHT11();
 void setupPushbutton(int pin);
 void pubPushbutton();
 void pubPIR01();
@@ -106,7 +106,7 @@ subscribeToAll();
 
 void loop() {
 mqttClient.loop();
-readDHT11();
+//readDHT11();
 pubPushbutton(); //TODO: se mudou, printa nova timestamp
 pubPIR01();
 
@@ -127,7 +127,7 @@ delay(500);
   }
 }
 
-void readDHT11(){
+/*void readDHT11(){
   int dht[2] ;
   int chk = DHT.read11(DHT11_PIN);  //reads DHT11
   temp = DHT.temperature;     // reads current state
@@ -151,6 +151,8 @@ void readDHT11(){
   lasttemp = temp;
   lasthumi = humi;
 }
+
+*/
 
 void setupBuzzer(int pin){
   pinMode(pin, OUTPUT);

@@ -9,10 +9,10 @@
 EthernetUDP Udp;
 
 #define CLIENT_ID "Arduino"
-#define BUZZER_PIN 51
-#define LED_PIN 45
+#define BUZZER_PIN 31
+#define LED_PIN 35
 //#define DHT11_PIN 49
-#define PUSHBUTTON_PIN 47
+#define PUSHBUTTON_PIN 33
 #define PIR01_VCC 7
 #define PIR01_PIN 6
 #define PIR01_GND 5
@@ -36,19 +36,15 @@ int lastPIR01State = 0;     // previous state of the button
 // Function prototypes
 void callback(char* topic, byte* payload, unsigned int length);
 void setupBuzzer(int pin);
+void setBuzzer(bool x);
+void setupLED(int pin);
 void subscribeToAll();
 //void readDHT11();
 void setupPushbutton(int pin);
 void pubPushbutton();
+void readBuzzer();
 void pubPIR01();
 boolean reconnect();
-void copyA(int* src, int* dst, int len);
-void copyB(int* src, int* dst, int len);
-void copyC(int* src, int* dst, int len);
-
-
-
-
 
 byte mac[] = {
   0x00, 0xAA, 0xBB, 0xCC, 0xDE, 0x02
@@ -58,10 +54,13 @@ IPAddress ip(192, 168, 0, 105);
 class myClass{
   public:
     String buzzer;
+    String lastBuzzer = "buzzeroff";
     String PIR01;
     String temp;
     String humi;
     String LED01;
+    String pushbutton;
+    int callbackread;
     
     //Setters
     void setBuzzer(int buzzerStatus){
@@ -89,114 +88,78 @@ PubSubClient mqttClient;
 String myString;
 
 void callback(char* topic, byte* payload, unsigned int length) {
+
   Serial.print("HiveMq: [");
   Serial.print(topic);
   Serial.print("] ");
-  //  char    msg_char = payload;
-  //  int     msg_int = payload;
-  //  String  msg_string = payload;  
   
-  char    msg_char[length];
+  char    payload_char[length];
+  char    topic_char;
   int     msg_int[length];
   String  msg_string[length];
   byte    msg_byte[length];
   
   for (int i=0;i<(length);i++) {
     Serial.print((char)payload[i]);
-    msg_char[i]     = payload[i];
- /*   Serial.println(); 
-    Serial.print("|msg_char[");
-    Serial.print(i);
-    Serial.print("]: ");
-    Serial.print(msg_char[i]);
-    Serial.print("   |   ");
-    Serial.print("payload[");
-    Serial.print(i);
-    Serial.print("]: ");
-    Serial.print(payload[i]);
-    Serial.print("| length: ");
-    Serial.print(length);
-    Serial.println();*/
+    payload_char[i]     = payload[i];
   }     
-    msg_char[length] = 0;
+//    Serial.println(topic);
+    topic_char = topic;
+    payload_char[length] = 0;
     Serial.println();
-/*
-    Serial.print("after loop -> msg_char: ");
-    Serial.println(msg_char);*/
-    
-/* if (topic == "lcabs1993/arduino/temp"){
-      myObj.temp = "1";//msg_char;
- }
- if (topic == "lcabs1993/arduino/humi"){
-      myObj.humi = "2";//msg_char;
- }
+    Serial.print("CALLBACK: payload_char: ");
+    Serial.println(payload_char);
+    myObj.PIR01 = payload_char;
+    Serial.print("CALLBACK: myObj.PIR01: ");
+    Serial.println(myObj.PIR01);
 
- if (topic == "lcabs1993/arduino/PIR01"){
-  myObj.PIR01 = "3";//msg_char;
- }
+    if ((myObj.PIR01) == "on"){
+      Serial.print("topic//|: ");
+      Serial.println("CALLBACK: PASSOU ALGUEM AÊW!");
+    }
 
- if (topic == "lcabs1993/arduino/buzzer"){
-      myObj.buzzer = "4";//msg_char;
- }*/
+    Serial.print("CALLBACK before test: myObj.buzzer: ");
+    Serial.println(myObj.buzzer);
 
-  
-
-  
-/*
-  Serial.print("/* debug");
+                                  ////////////IFS FUNCIONANDO ABAIXO
+      if ((((myObj.PIR01) == "buzzeron"))){    // if a command is received to turn the buzzer on
+      myObj.buzzer = (myObj.PIR01);        // saves the new command
+ //     setBuzzer(1);             // turns buzzer on/off        - NOT WORKING
+} 
+      if ((((myObj.PIR01) == "buzzeroff"))){    // if a command is received to turn the buzzer on
+      myObj.buzzer = (myObj.PIR01);        // saves the new command
+   //   setBuzzer(0);             // turns buzzer on/off        - NOT WORKING
+} 
+    Serial.print("CALLBACK after test:  myObj.buzzer: ");
+    Serial.println(myObj.buzzer);
   Serial.println();
-
-  Serial.print("| myString.String(): ");
-  Serial.print(myString.charAt(1));
-  Serial.println();
-
-  Serial.print("| msg_char: ");
-  Serial.print(msg_char);
-  Serial.println();
-
-  Serial.print("| msg_int: ");
-//  Serial.print(msg_int);
-  Serial.println();
-
-  Serial.print("| msg_string: ");
- // Serial.print(msg_string);
-  Serial.println();
-
-  Serial.print("| msg_byte: ");
-//  Serial.print(msg_byte);
-  Serial.println();
-  */
-  
   }
   
-void setupLED(){
-  int pin;
-  pinMode(pin, OUTPUT);
-}
 
 ////////////////////////////////////////////////////////////////////////////////SETUP/////
 void setup() {
-      Serial.begin(9600); // Start serial port 
-      Serial.println("----------------------------------");
+      Serial.begin(9600);                                                       // Start serial port 
+      Serial.println("----------------------------------");                     // print stuff
       Serial.println("__________________________________");
       Serial.print("SERIAL: "); Serial.println("<Port ON>");
-      pinMode(PIR01_VCC,OUTPUT);
+      
+      pinMode(PIR01_VCC,OUTPUT);                                                // sets some pinModes on the board
       pinMode(PIR01_GND,OUTPUT);
       digitalWrite(PIR01_VCC,HIGH);
       digitalWrite(PIR01_GND,LOW);
       pinMode(PIR01_PIN,INPUT);
       lastReconnectAttempt = 0;
 ////////////////////////////////////////////
- mqttClient.setClient(ethClient);
- mqttClient.setServer("broker.hivemq.com",1883);
- mqttClient.setCallback(callback);
+ mqttClient.setClient(ethClient);                                               // starts the client
+ mqttClient.setServer("broker.hivemq.com",1883);                                // connects to the server
+ mqttClient.setCallback(callback);                                              // defines the callback function
 ////////////////////////////////////////////
   // start the Ethernet connection:  
   Serial.print("SERIAL: ");
   Serial.println("Initializing Ethernet with DHCP...");
   if (Ethernet.begin(mac) == 0) {
     Serial.print("SERIAL: ");
-    Serial.println("Failed to configure Ethernet using DHCP");
+    Serial.println("Failed to configure Ethernet using DHCP");  // TODO: Add a hardware watchdog
     if (Ethernet.hardwareStatus() == EthernetNoHardware) {
       Serial.print("SERIAL: ");
       Serial.println("Ethernet shield was not found.  Sorry, can't run without hardware. :(");
@@ -204,20 +167,17 @@ void setup() {
       Serial.print("SERIAL: ");
       Serial.println("Ethernet cable is not connected.");
     }
-    // no point in carrying on, so do nothing forevermore:
     while (true) {
-      delay(1);
+      delay(1);                                               // no point in carrying on, so do nothing forevermore:
     }
   }
-  // print your local IP address:
   Serial.print("SERIAL: ");
-  Serial.print("Ethernet IP: ");
-  Serial.println(Ethernet.localIP());
+  Serial.print("Ethernet IP: ");  
+  Serial.println(Ethernet.localIP());                         // prints local IP address
 ///////////////////////////////////////////////
 setupBuzzer(BUZZER_PIN);
-setupLED();
+setupLED(LED_PIN);
 subscribeToAll();
-
 }
 /////////////////////////////////////////////////////////////////////////////////LOOP/////
 
@@ -226,16 +186,9 @@ mqttClient.loop();
 //readDHT11();
 pubPushbutton(); //TODO: se mudou, printa nova timestamp
 pubPIR01();
-
+readBuzzer();
 //atualizaOLED(); //TODO: atualiza OLED com novos valores
 
-
-
-
-
-
-
-//delay(500);
   if (!mqttClient.connected()) {
     long now = millis();
     if (now - lastReconnectAttempt > 5000) {
@@ -282,80 +235,84 @@ pubPIR01();
 
 void setupBuzzer(int pin){
   pinMode(pin, OUTPUT);
+  digitalWrite(pin,LOW);
 }
 
-void pubPushbutton(){
-  // read the pushbutton input pin:
-  buttonState = digitalRead(buttonPin);
-  digitalWrite(BUZZER_PIN,buttonState);
-  digitalWrite(LED_PIN,buttonState);
-  // compare the buttonState to its previous state
-  if (buttonState != lastButtonState) {
-    // if the state has changed, increment the counter
-    if (buttonState == HIGH) {
-      // if the current state is HIGH then the button went from off to on:
-      buttonPushCounter++;
-      Serial.print("SERIAL: ");
-      Serial.print("Pushbutton: ON ");
+void setupLED(int pin){
+  pinMode(pin, OUTPUT);
+  digitalWrite(pin,LOW);
+}
+
+void setBuzzer(bool x){
+  digitalWrite(BUZZER_PIN,x);
+}
+
+void setLED(bool x){
+  digitalWrite(LED_PIN,x);
+}
+
+void pubPushbutton(){   
+  buttonState = digitalRead(buttonPin);                             // read state
+  if (buttonState != lastButtonState) {                             // has it changed?
+    if (buttonState == HIGH) {                                      // if changed to on
+      setBuzzer(true);                                              // turns buzzer on
+      buttonPushCounter++;                                          // increment counter
+      Serial.print("SERIAL: ");                                     // print stuff
+      Serial.print("Pushbutton: ON ");      
       Serial.print("  |  ");
-      Serial.print("Counter: ");
-      Serial.print(buttonPushCounter);
-      Serial.print("  |  ");
-      Serial.print("myObj.temp: ");
-      Serial.println(myObj.temp);
-      mqttClient.publish("lcabs1993/arduino","on");
-
-
-
-
-
-
-      
-    } else {
-      // if the current state is LOW then the button went from on to off:
-      Serial.print("SERIAL: ");
-      Serial.print("Pushbutton: OFF");
-      Serial.print("  |  ");
-      Serial.print("Counter: ");
+      Serial.print("Pushbutton Counter: ");
       Serial.println(buttonPushCounter);
-      mqttClient.publish("lcabs1993/arduino","off");
+      mqttClient.publish("lcabs1993/arduino/pushbutton","on");      // TODO: publish timestamp
+    } else {                                                        // when it goes low
+      setBuzzer(false);                                             // turns buzzer off
+      Serial.print("SERIAL: ");                                     // print stuff
+      Serial.print("Pushbutton: OFF");                  
+      Serial.print("  |  ");
+      Serial.print("Pushbutton Counter: ");
+      Serial.println(buttonPushCounter);
+      mqttClient.publish("lcabs1993/arduino/pushbutton","off");     // maybe delete this?
     }
-
   }
-    lastButtonState = buttonState;
-}
+    lastButtonState = buttonState;                                  // updates last state
+}                                
 
 void pubPIR01(){
-    // read the pushbutton input pin:
-  PIR01State = digitalRead(PIR01_PIN);
-  // compare the buttonState to its previous state
-  if (PIR01State != lastPIR01State) {
-    // if the state has changed, increment the counter
-    if (PIR01State == HIGH) {
-      // if the current state is HIGH then the button went from off to on:
-      PIR01Counter++;
-  //    debug();
-      Serial.print("SERIAL: ");
+  PIR01State = digitalRead(PIR01_PIN);                              //  read state
+  if (PIR01State != lastPIR01State) {                               //  has it changed?
+    if (PIR01State == HIGH) {                                       //  if changed to on
+      setLED(true);                                                 //  turns LED on
+      PIR01Counter++;                                               //  increment counter
+      Serial.print("SERIAL: ");                                     //  print stuff
       Serial.print("PIR Sensor: ON ");
       Serial.print("  |  ");
-      Serial.print("Counter: ");
-      Serial.println(PIR01Counter);
-  
-      mqttClient.publish("lcabs1993/arduino/PIR01","on");
-
-    } else {
-      // if the current state is LOW then the button went from on to off:
-      Serial.print("SERIAL: ");
-      Serial.print("PIR Sensor: OFF");
+      Serial.print("PIR01 Counter: ");
+      Serial.print(PIR01Counter);
       Serial.print("  |  ");
-      Serial.print("Counter: ");
+      Serial.print("DEBUG: myObj.PIR01: ");
+      Serial.println(myObj.PIR01);
+ //     debug();
+      mqttClient.publish("lcabs1993/arduino/PIR01","on");           //  TODO: publish timestamp
+    } else {                                                        //  when it goes low
+      setLED(false);                                                //  turns LED off
+      Serial.print("SERIAL: ");                                     //  print stuff
+      Serial.print("PIR Sensor: OFF");  
+      Serial.print("  |  ");
+      Serial.print("PIR01 Counter: ");
       Serial.println(PIR01Counter);
-      mqttClient.publish("lcabs1993/arduino/PIR01","off");
+      mqttClient.publish("lcabs1993/arduino/PIR01","off");          //  maybe delete this later?
     }
   }
-    lastPIR01State = PIR01State;
+    lastPIR01State = PIR01State;                                    //  updates last state
   }
-  
+/*
+void debug(){
+    Serial.print("infunctionDEBUG: myObj.PIR01: ");
+    Serial.println(myObj.PIR01);
+    if ((myObj.PIR01) == "on"){
+      Serial.println("infunctionDEBUG: PASSOU ALGUEM AÊ!");
+    }
+  }
+*/
 boolean reconnect() {
   if (mqttClient.connect(CLIENT_ID)) {
     mqttClient.publish("lcabs1993/arduino","Hello world!");     // Once connected, publish an announcement...
@@ -368,10 +325,20 @@ void subscribeToAll(){
  mqttClient.subscribe("lcabs1993");
  mqttClient.subscribe("lcabs1993/arduino");
  mqttClient.subscribe("lcabs1993/arduino/buzzer");
+ mqttClient.subscribe("lcabs1993/arduino/pushbutton");
  mqttClient.subscribe("lcabs1993/arduino/led");
  mqttClient.subscribe("lcabs1993/arduino/dht11/temp");
  mqttClient.subscribe("lcabs1993/arduino/dht11/humidade");
  mqttClient.subscribe("lcabs1993/arduino/PIR01");
 }
 
-
+void readBuzzer(){
+  if (myObj.buzzer != myObj.lastBuzzer) {           // if the state has changed
+if (myObj.buzzer == "buzzeron") {                   
+      setBuzzer(true);                              // turns buzzer on
+    } else {                                        
+setBuzzer(false);                                   // or off
+    }
+  }
+    myObj.lastBuzzer = myObj.buzzer;                // and update the last state
+}

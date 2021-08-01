@@ -13,6 +13,7 @@
 
 
 #include      <SPI.h>
+#include      <Wire.h>
 #include      <stdlib.h>
 #include      <Ethernet.h>
 #include      <PubSubClient.h>
@@ -20,9 +21,11 @@
 //#include      <Bounce.h>
 #include      <elapsedMillis.h>
 //#include    <dht.h>
+#include      <Adafruit_GFX.h>
+#include      <Adafruit_SSD1306.h>
 
 //dht         DHT;
-EthernetUDP   Udp;
+
 
 #define       CLIENT_ID             "Arduino"
 #define       MQTT_HEARTBEAT_TIME1  5000                         // in milliseconds
@@ -33,10 +36,28 @@ EthernetUDP   Udp;
 #define       LED_PIN               35
 //#define     DHT11_PIN             49
 #define       PUSHBUTTON_PIN        33
-#define       PIR01_VCC             7
+#define       PIR01_VCC             5
 #define       PIR01_PIN             6
-#define       PIR01_GND             5
+#define       PIR01_GND             7
 #define       LAMP_PIN              37
+#define       SCREEN_WIDTH 128 // OLED display width, in pixels
+#define       SCREEN_HEIGHT 64 // OLED display height, in pixels
+
+// DISPLAY-RELATED DEFINES //
+
+#define       SCREEN_WIDTH 128 // OLED display width, in pixels
+#define       SCREEN_HEIGHT 64 // OLED display height, in pixels
+// Declaration for an SSD1306 display connected to I2C (SDA, SCL pins)
+#define OLED_RESET     4 // Reset pin # (or -1 if sharing Arduino reset pin)
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+#define NUMFLAKES     10 // Number of snowflakes in the animation example
+#define LOGO_HEIGHT   16
+#define LOGO_WIDTH    16
+
+// endDisplay
+
+
+
 
 //int         lasttemp = 11;                                    //initialize variable for last temperature
 //int         lasthumi = 10;                                    //initialize variable for last humidity
@@ -78,26 +99,47 @@ byte mac[] = {
 };
 IPAddress ip(192, 168, 0, 105);
 
+class PIR{
+    public:
+    int     Counter = 0;          // how many times has this sensor been activated
+    int     Position;             // there might be many PIR sensors involved
+    bool    PIRstatus;            // on or off
+  //  int     timestamp[1][6] ;     // logs the timestamp of all events
+    
+};
+
+class Button{
+    public:
+    int     Counter = 0;          // how many times has this sensor been activated
+    int     Position;             // there might be many PIR sensors involved
+    bool    Pushbuttonstatus;            // on or off
+  //  int     timestamp[1][6] ;     // logs the timestamp of all events
+    
+};
+
+
 class myClass {
   public:
-    int    inthour;
-    int    intmin;
-    int    intsec;
-    char strhour;
-    char strmin;
-    char strsec;
-    String payload;                       // saves the payload received
-    String lamp;
-    String lastLamp = "lampoff";
-    String buzzer;                        // saves the buzzer state
-    String lastBuzzer = "buzzeroff";      // initializes the buzzer state
-    String PIR01;                         // saves the PIR01 state
-    String temp;                          // saves the temperature
-    String humi;                          // saves the humidity
-    String LED01;                         // saves the LED01 state
-    String pushbutton;                    // saves the pushbutton state
-    String timestamp[8];                  // saves the timestamp
-    int callbackread;                     // ?
+    int     hourminsec[3];
+    int     inthour;
+    int     intmin;
+    int     intsec;
+    char    strhour;
+    char    strmin;
+    char    strsec;
+    String  payload;                       // saves the payload received
+    String  lamp;
+    String  lastLamp = "lampoff";
+    String  buzzer;                        // saves the buzzer state
+    String  lastBuzzer = "buzzeroff";      // initializes the buzzer state
+    String  PIR01;                         // saves the PIR01 state
+    String  temp;                          // saves the temperature
+    String  humi;                          // saves the humidity
+    String  LED01;                         // saves the LED01 state
+    String  pushbutton;                    // saves the pushbutton state
+    String  timestamp[8];                  // saves the timestamp
+    char    chartimestamp[8];
+    int     callbackread;                     // ?
 
     //Setters
     void setBuzzer(int buzzerStatus) {
@@ -116,6 +158,9 @@ class myClass {
 };
 
 myClass         myObj;
+EthernetUDP     Udp;
+PIR             PIR01;
+Button          Pushbutton;
 EthernetClient  ethClient;                                              // Ethernet and MQTT related objects
 PubSubClient    mqttClient;
 
@@ -127,10 +172,13 @@ void callback(char* topic, byte* payload, unsigned int length) {
   for (int i = 0; i < (length); i++) {                                  // reads and prints the payload
     Serial.print((char)payload[i]);
     payload_char[i]     = payload[i];
+//    displaywrite(payload[i]);
   }
   payload_char[length] = 0;                                             // it needs a null to end the string
   Serial.println();
   myObj.payload = payload_char;                                         // saves the payload
+//  displaywrite(payload_char);
+//  displaywrite("\n");
   //BUZZER
   readBuzzer(); 
   //PIR01
@@ -143,10 +191,20 @@ void callback(char* topic, byte* payload, unsigned int length) {
 
 ////////////////////////////////////////////////////////////////////////////////SETUP/////
 void setup() {
+
+/////////// DISPLAY
+
+setupDisplay();
+
+
+//////////// endDISPLAY
+  
   Serial.begin(9600);                                                           // Starts serial port
   Serial.println();                                                             // To keep it neat
   Serial.println("----------------------------------");                         // prints stuff
+  displaywrite("---------------------");
   Serial.println("__________________________________");
+  displaywrite("SERIAL: <Port ON>\n");
   Serial.print("SERIAL: "); Serial.println("<Port ON>");
   pinMode(PIR01_VCC, OUTPUT);                                                   // sets some pinModes on the board
   pinMode(PIR01_GND, OUTPUT);
@@ -160,15 +218,19 @@ void setup() {
   mqttClient.setCallback(callback);                                               // defines the callback function
   ////////////////////////////////////////////
   Serial.print("SERIAL: ");                                                       // starts the Ethernet connection
+  displaywrite("Initializing Ethernet with DHCP...\n");
   Serial.println("Initializing Ethernet with DHCP...");
   if (Ethernet.begin(mac) == 0) {                                                 // TODO: Iterate this to keep trying to connect
     Serial.print("SERIAL: ");
+    displaywrite("Failed to configure Ethernet using DHCP");
     Serial.println("Failed to configure Ethernet using DHCP");                    // TODO: Add a hardware watchdog
     if (Ethernet.hardwareStatus() == EthernetNoHardware) {
       Serial.print("SERIAL: ");
+      displaywrite("Ethernet shield was not found.\n");
       Serial.println("Ethernet shield was not found.");
     } else if (Ethernet.linkStatus() == LinkOFF) {
       Serial.print("SERIAL: ");
+      displaywrite("Ethernet cable is not connected.\n");
       Serial.println("Ethernet cable is not connected.");
     }
     while (true) {
@@ -178,13 +240,18 @@ void setup() {
   Udp.begin(localPort);
  // getTime();
   Serial.print("SERIAL: ");
+  displaywrite("Ethernet ON\n");
   Serial.print("Ethernet IP: ");
   Serial.println(Ethernet.localIP());                                             // prints local IP address
+//  displaywrite(*Ethernet.localIP());
   ///////////////////////////////////////////////
   setupBuzzer(BUZZER_PIN);
   setupLamp(LAMP_PIN);
   setupLED(LED_PIN);
   subscribeToAll();
+//  testdrawrect();
+//  delay(1000);
+
 }
 /////////////////////////////////////////////////////////////////////////////////LOOP/////
 
@@ -204,7 +271,11 @@ void loop() {
       if (reconnect()) {
         Serial.print("SERIAL: ");
         Serial.println("mqTT status: ON ");
+        display.write("mqTT status: ON \n");
         mqttClient.publish("lcabs1993/arduino", "Reconnected!");
+        display.write("Reconnected!\n");
+        display.clearDisplay();
+        display.display();
         lastReconnectAttempt = 0;
       }
     }
@@ -271,23 +342,22 @@ void pubPushbutton() {
   buttonState = digitalRead(buttonPin);                             // read state
   if (buttonState != lastButtonState) {                             // has it changed?
     if (buttonState == HIGH) {                                      // if changed to on
+      getTime();
       setBuzzer(true);                                              // turns buzzer on
-      buttonPushCounter++;                                          // increment counter
+      Pushbutton.Counter = Pushbutton.Counter + 1;                  // increment counter
       Serial.print("SERIAL: ");                                     // print stuff
       Serial.print("Pushbutton: ON ");
       Serial.print("  |  ");
-      Serial.print("Pushbutton Counter: ");
-      Serial.println(buttonPushCounter);
-      pubTimestamp("lcabs1993/arduino/pushbutton");
-//      mqttClient.publish("lcabs1993/arduino/pushbutton", "on");     // TODO: publish timestamp
+      Serial.print("Pushbutton.Counter: ");
+      Serial.println(Pushbutton.Counter);
+      pubTimestamp("lcabs1993/arduino/pushbutton");                  // publishes timestamp
     } else {                                                        // when it goes low
       setBuzzer(false);                                             // turns buzzer off
       Serial.print("SERIAL: ");                                     // print stuff
       Serial.print("Pushbutton: OFF");
       Serial.print("  |  ");
-      Serial.print("Pushbutton Counter: ");
-      Serial.println(buttonPushCounter);
-//      mqttClient.publish("lcabs1993/arduino/pushbutton", "off");    // maybe delete this?
+      Serial.print("Pushbutton.Counter: ");
+      Serial.println(Pushbutton.Counter);
     }
   }
   lastButtonState = buttonState;                                    // updates last state
@@ -299,22 +369,20 @@ void pubPIR01() {
     if (PIR01State == HIGH) {                                       //  if changed to on
       setLED(true);                                                 //  turns LED on
       getTime();
-      PIR01Counter++;                                               //  increment counter
+      PIR01.Counter = PIR01.Counter + 1;                            //  increment counter
       Serial.print("SERIAL: ");                                     //  print stuff
       Serial.print("PIR Sensor: ON ");
       Serial.print("  |  ");
       Serial.print("PIR01 Counter: ");
-      Serial.println(PIR01Counter);
-      pubTimestamp("lcabs1993/arduino/PIR01");
-//      mqttClient.publish("lcabs1993/arduino/PIR01", "PIR01on");     //  TODO: publish timestamp
+      Serial.println(PIR01.Counter);
+      pubTimestamp("lcabs1993/arduino/PIR01");                      //  publishes timestamp
     } else {                                                        //  when it goes low
       setLED(false);                                                //  turns LED off
       Serial.print("SERIAL: ");                                     //  print stuff
       Serial.print("PIR Sensor: OFF");
       Serial.print("  |  ");
       Serial.print("PIR01 Counter: ");
-      Serial.println(PIR01Counter);
-//      mqttClient.publish("lcabs1993/arduino/PIR01", "PIR01off");    //  maybe delete this later?
+      Serial.println(PIR01.Counter);
     }
   }
   lastPIR01State = PIR01State;                                      //  updates last state
@@ -421,9 +489,63 @@ void readPIR01(){
 }
 
 void readUpdate(){
+
+//  testdrawline();      // Draw many lines
+//  testdrawrect();      // Draw rectangles (outlines)
+//  testfillrect();      // Draw rectangles (filled)
+//  testdrawcircle();    // Draw circles (outlines)
+//  testfillcircle();    // Draw circles (filled)
+//  testdrawroundrect(); // Draw rounded rectangles (outlines)
+//  testfillroundrect(); // Draw rounded rectangles (filled)
+//  testdrawtriangle();  // Draw triangles (outlines)
+//  testfilltriangle();  // Draw triangles (filled)
+//  testdrawchar();      // Draw characters of the default font
+//  testdrawstyles();    // Draw 'stylized' characters
+//  testscrolltext();    // Draw scrolling text
+//  testdrawbitmap();    // Draw a small bitmap image
+  
   if ((((myObj.payload) == "updateall"))) {              
       mqTTupdateall();                                   // updates all topics on myObj
+      displaywrite(myObj.chartimestamp);
+      displaywrite("\n");
   }  
+      if ((((myObj.payload) == "drawline"))) {              
+      testdrawline();                                   
+  } 
+    if ((((myObj.payload) == "drawrect"))) {              
+      testdrawrect();                                   
+  }  
+      if ((((myObj.payload) == "fillrect"))) {              
+      testfillrect();                                   
+  }
+      if ((((myObj.payload) == "drawcircle"))) {              
+      testdrawcircle();                                   
+  }
+        if ((((myObj.payload) == "fillcircle"))) {              
+      testfillcircle();                                   
+  }
+        if ((((myObj.payload) == "drawroundrect"))) {              
+      testdrawroundrect();                                   
+  }
+        if ((((myObj.payload) == "drawtriangle"))) {              
+      testdrawtriangle();                                   
+  }
+        if ((((myObj.payload) == "filltriangle"))) {              
+      testfilltriangle();                                   
+  }
+          if ((((myObj.payload) == "drawchar"))) {              
+      testdrawchar();                                   
+  }
+          if ((((myObj.payload) == "drawstyles"))) {              
+      testdrawstyles();                                   
+  }
+          if ((((myObj.payload) == "scrolltext"))) {              
+      testscrolltext();                                   
+  }
+          if ((((myObj.payload) == "drawbitmap"))) {              
+      testdrawbitmap();                                   
+  }
+  
 }
 
 void mqTTupdateall(){
@@ -436,7 +558,7 @@ void mqTTupdateall(){
 
 void getTime(){
     sendNTPpacket(timeServer);                            // send an NTP packet to a time server
-    delay(1000);                                          // wait to see if a reply is available
+    delay(1000);                                          // TODO : implement non blocking delay
     if (Udp.parsePacket()) {
     Udp.read(packetBuffer, NTP_PACKET_SIZE);
     unsigned long highWord = word(packetBuffer[40], packetBuffer[41]);
@@ -446,7 +568,7 @@ void getTime(){
     unsigned long epoch = secsSince1900 - seventyYears - 10800;
        
     Serial.println();    
-    Serial.print("int timestamp:  ");                     // UTC is the time at Greenwich Meridian (GMT)
+    Serial.print("Event at: ");                           // UTC is the time at Greenwich Meridian (GMT)
     myObj.inthour = ((epoch  % 86400L) / 3600);
     Serial.print(myObj.inthour);                          // print the hour (86400 equals secs per day)
     Serial.print(':');
@@ -458,15 +580,8 @@ void getTime(){
     if ((epoch % 60) < 10) {                              // In the first 10 seconds of each minute, we'll want a leading '0'
     }
     myObj.intsec = (epoch % 60);
-    
-    Serial.println(myObj.intsec);
-    Serial.print("String timestamp: ");
-    Serial.print(myObj.strhour);
-    Serial.print(":");
-    Serial.print(myObj.strmin);
-    Serial.print(":");
-    Serial.print(myObj.strsec);
-    Serial.println();
+
+    Serial.println(myObj.intsec); 
   }
 }
 
@@ -479,25 +594,409 @@ void pubTimestamp(char* outTopic){
       itoa(myObj.intmin, charformin, 10);
       itoa(myObj.intsec, charforsec, 10);
       timestamp[0] =  charforhour[0];
+      myObj.chartimestamp[0] = timestamp[0];    
       timestamp[1] =  charforhour[1];    
+      myObj.chartimestamp[1] = timestamp[1];    
       timestamp[2] =  ':';       
+      myObj.chartimestamp[2] = timestamp[2];    
       if (myObj.intmin < 10){
       timestamp[3] =  '0';
+      myObj.chartimestamp[3] = timestamp[3];
       timestamp[4] =  charformin[0];
+      myObj.chartimestamp[4] = timestamp[4];
       } else {
       timestamp[3] =  charformin[0];
+      myObj.chartimestamp[3] = timestamp[3];
       timestamp[4] =  charformin[1];
+      myObj.chartimestamp[4] = timestamp[4];
       }          
-      timestamp[5] =  ':';    
+      timestamp[5] =  ':'; 
+      myObj.chartimestamp[5] = timestamp[5];   
       if (myObj.intsec < 10){
-      timestamp[6] =  'X';
+      timestamp[6] =  '0';
+      myObj.chartimestamp[6] = timestamp[6];
       timestamp[7] =  charforsec[0];
+      myObj.chartimestamp[7] = timestamp[7];
       } else {
       timestamp[6] =  charforsec[0];
+      myObj.chartimestamp[6] = timestamp[6];
       timestamp[7] =  charforsec[1];
+      myObj.chartimestamp[7] = timestamp[7];
       }     
-      timestamp[8] =  '\0';    
-      Serial.print("timestamp: ");
-      Serial.println(timestamp);    
+      timestamp[8] =  '\0';
+      myObj.chartimestamp[8] = timestamp[8];
+//      Serial.print("timestamp: ");
+//      Serial.println(timestamp);    
+      display.write(timestamp);
+      display.write("\n");
+      
+      display.display();
       mqttClient.publish(outTopic, timestamp);  
+}
+/////////////////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////////////////
+//OLED DISPLAY STUFF
+
+/*
+  Hardware Connections (Breakoutboard to Arduino):
+  -5V = 5V (3.3V is allowed)
+  -GND = GND
+  -SDA = A4 (or SDA)
+  -SCL = A5 (or SCL)
+  -INT = Not connected
+ 
+  The MAX30105 Breakout can handle 5V or 3.3V I2C logic. We recommend powering the board with 5V
+  but it will also run at 3.3V.
+*/
+
+static const unsigned char PROGMEM logo_bmp[] =
+{ B00000000, B11000000,
+  B00000001, B11000000,
+  B00000001, B11000000,
+  B00000011, B11100000,
+  B11110011, B11100000,
+  B11111110, B11111000,
+  B01111110, B11111111,
+  B00110011, B10011111,
+  B00011111, B11111100,
+  B00001101, B01110000,
+  B00011011, B10100000,
+  B00111111, B11100000,
+  B00111111, B11110000,
+  B01111100, B11110000,
+  B01110000, B01110000,
+  B00000000, B00110000 };
+
+ void setupDisplay(){     //// CLEAN THIS PULL
+
+   // SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
+  if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) { //Ive changed the address //already chill
+    Serial.println(F("SSD1306 allocation failed"));
+    for(;;); // Don't proceed, loop forever
+  }
+
+  // Show initial display buffer contents on the screen --
+  // the library initializes this with an Adafruit splash screen.
+ // display.display();
+//  delay(2000); // Pause for 2 seconds
+
+  // Clear the buffer
+
+
+  // Draw a single pixel in white
+//  display.drawPixel(10, 10, SSD1306_WHITE);
+  loadingscreen();
+  // Show the display buffer on the screen. You MUST call display() after
+  // drawing commands to make them visible on screen!
+//  display.display();
+//  delay(2000);
+  // display.display() is NOT necessary after every single drawing command,
+  // unless that's what you want...rather, you can batch up a bunch of
+  // drawing operations and then update the screen all at once by calling
+  // display.display(). These examples demonstrate both approaches...
+
+//  testdrawline();      // Draw many lines
+
+//  testdrawrect();      // Draw rectangles (outlines)
+
+//  testfillrect();      // Draw rectangles (filled)
+
+//  testdrawcircle();    // Draw circles (outlines)
+
+//  testfillcircle();    // Draw circles (filled)
+
+//  testdrawroundrect(); // Draw rounded rectangles (outlines)
+
+//  testfillroundrect(); // Draw rounded rectangles (filled)
+
+//  testdrawtriangle();  // Draw triangles (outlines)
+
+//  testfilltriangle();  // Draw triangles (filled)
+
+//  testdrawchar();      // Draw characters of the default font
+
+//  testdrawstyles();    // Draw 'stylized' characters
+
+//  testscrolltext();    // Draw scrolling text
+
+//  testdrawbitmap();    // Draw a small bitmap image
+
+  // Invert and restore display, pausing in-between
+//  display.invertDisplay(true);
+//  delay(1000);
+//  display.invertDisplay(false);
+// delay(1000);
+
+//  testanimate(logo_bmp, LOGO_WIDTH, LOGO_HEIGHT); // Animate bitmaps
+
+  
+ }
+
+void testdrawline() {
+  int16_t i;
+
+  display.clearDisplay(); // Clear display buffer
+
+  for(i=0; i<display.width(); i+=4) {
+    display.drawLine(0, 0, i, display.height()-1, SSD1306_WHITE);
+    display.display(); // Update screen with each newly-drawn line
+    delay(1);
+  }
+  for(i=0; i<display.height(); i+=4) {
+    display.drawLine(0, 0, display.width()-1, i, SSD1306_WHITE);
+    display.display();
+    delay(1);
+  }
+  delay(250);
+
+  display.clearDisplay();
+
+  for(i=0; i<display.width(); i+=4) {
+    display.drawLine(0, display.height()-1, i, 0, SSD1306_WHITE);
+    display.display();
+    delay(1);
+  }
+  for(i=display.height()-1; i>=0; i-=4) {
+    display.drawLine(0, display.height()-1, display.width()-1, i, SSD1306_WHITE);
+    display.display();
+    delay(1);
+  }
+  delay(250);
+
+  display.clearDisplay();
+
+  for(i=display.width()-1; i>=0; i-=4) {
+    display.drawLine(display.width()-1, display.height()-1, i, 0, SSD1306_WHITE);
+    display.display();
+    delay(1);
+  }
+  for(i=display.height()-1; i>=0; i-=4) {
+    display.drawLine(display.width()-1, display.height()-1, 0, i, SSD1306_WHITE);
+    display.display();
+    delay(1);
+  }
+  delay(250);
+
+  display.clearDisplay();
+
+  for(i=0; i<display.height(); i+=4) {
+    display.drawLine(display.width()-1, 0, 0, i, SSD1306_WHITE);
+    display.display();
+    delay(1);
+  }
+  for(i=0; i<display.width(); i+=4) {
+    display.drawLine(display.width()-1, 0, i, display.height()-1, SSD1306_WHITE);
+    display.display();
+    delay(1);
+  }
+
+  delay(2000); // Pause for 2 seconds
+}
+
+void testdrawrect(void) {
+  display.clearDisplay();
+
+  for(int16_t i=0; i<display.height()/2; i+=2) {
+    display.drawRect(i, i, display.width()-2*i, display.height()-2*i, SSD1306_WHITE);
+    display.display(); // Update screen with each newly-drawn rectangle
+    delay(1);
+  }
+
+  display.clearDisplay();
+  display.display();
+}
+
+void testfillrect(void) {
+  display.clearDisplay();
+
+  for(int16_t i=0; i<display.height()/2; i+=3) {
+    // The INVERSE color is used so rectangles alternate white/black
+    display.fillRect(i, i, display.width()-i*2, display.height()-i*2, SSD1306_INVERSE);
+    display.display(); // Update screen with each newly-drawn rectangle
+    delay(1);
+  }
+
+  delay(2000);
+}
+
+void testdrawcircle(void) {
+  display.clearDisplay();
+
+  for(int16_t i=0; i<max(display.width(),display.height())/2; i+=2) {
+    display.drawCircle(display.width()/2, display.height()/2, i, SSD1306_WHITE);
+    display.display();
+    delay(1);
+  }
+
+  delay(2000);
+}
+
+void testfillcircle(void) {
+  display.clearDisplay();
+
+  for(int16_t i=max(display.width(),display.height())/2; i>0; i-=3) {
+    // The INVERSE color is used so circles alternate white/black
+    display.fillCircle(display.width() / 2, display.height() / 2, i, SSD1306_INVERSE);
+    display.display(); // Update screen with each newly-drawn circle
+    delay(1);
+  }
+
+  delay(2000);
+}
+
+void testdrawroundrect(void) {
+  display.clearDisplay();
+
+  for(int16_t i=0; i<display.height()/2-2; i+=2) {
+    display.drawRoundRect(i, i, display.width()-2*i, display.height()-2*i,
+      display.height()/4, SSD1306_WHITE);
+    display.display();
+    delay(1);
+  }
+
+  delay(2000);
+}
+
+void testfillroundrect(void) {
+  display.clearDisplay();
+
+  for(int16_t i=0; i<display.height()/2-2; i+=2) {
+    // The INVERSE color is used so round-rects alternate white/black
+    display.fillRoundRect(i, i, display.width()-2*i, display.height()-2*i,
+      display.height()/4, SSD1306_INVERSE);
+    display.display();
+    delay(1);
+  }
+
+  delay(2000);
+}
+
+void testdrawtriangle(void) {
+  display.clearDisplay();
+
+  for(int16_t i=0; i<max(display.width(),display.height())/2; i+=5) {
+    display.drawTriangle(
+      display.width()/2  , display.height()/2-i,
+      display.width()/2-i, display.height()/2+i,
+      display.width()/2+i, display.height()/2+i, SSD1306_WHITE);
+    display.display();
+    delay(1);
+  }
+
+  delay(2000);
+}
+
+void testfilltriangle(void) {
+  display.clearDisplay();
+
+  for(int16_t i=max(display.width(),display.height())/2; i>0; i-=5) {
+    // The INVERSE color is used so triangles alternate white/black
+    display.fillTriangle(
+      display.width()/2  , display.height()/2-i,
+      display.width()/2-i, display.height()/2+i,
+      display.width()/2+i, display.height()/2+i, SSD1306_INVERSE);
+    display.display();
+    delay(1);
+  }
+
+  delay(2000);
+}
+
+void loadingscreen(){
+//  char txt[];      
+  display.clearDisplay();
+  display.setTextSize(1);               // Normal 1:1 pixel scale
+  display.setTextColor(SSD1306_WHITE);  // Draw white text
+  display.setCursor(0, 0);              // Start at top-left corner
+  display.cp437(true);                  // Use full 256 char 'Code Page 437' font
+//  display.write(txt);
+//  display.display();
+//  delay(3000);
+//  display.clearDisplay();
+//  display.display();
+}
+
+void displaywrite(char txt[])
+{
+  display.write(txt);
+  display.display();  
+}
+
+
+void testdrawchar(void) {
+  display.clearDisplay();
+
+  display.setTextSize(1);      // Normal 1:1 pixel scale
+  display.setTextColor(SSD1306_WHITE); // Draw white text
+  display.setCursor(0, 0);     // Start at top-left corner
+  display.cp437(true);         // Use full 256 char 'Code Page 437' font
+
+  // Not all the characters will fit on the display. This is normal.
+  // Library will draw what it can and the rest will be clipped.
+  for(int16_t i=0; i<256; i++) {
+    if(i == '\n') display.write(' ');
+    else          display.write(i);
+  }
+
+  display.display();
+  delay(2000);
+}
+
+void testdrawstyles(void) {
+  display.clearDisplay();
+
+  display.setTextSize(1);             // Normal 1:1 pixel scale
+  display.setTextColor(SSD1306_WHITE);        // Draw white text
+  display.setCursor(0,0);             // Start at top-left corner
+  display.println(F("Hello, world!"));
+
+  display.setTextColor(SSD1306_BLACK, SSD1306_WHITE); // Draw 'inverse' text
+  display.println(3.141592);
+
+  display.setTextSize(2);             // Draw 2X-scale text
+  display.setTextColor(SSD1306_WHITE);
+  display.print(F("0x")); display.println(0xDEADBEEF, HEX);
+
+  display.display();
+  delay(2000);
+}
+
+void testscrolltext(void) {
+  display.clearDisplay();
+
+  display.setTextSize(2); // Draw 2X-scale text
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(10, 0);
+  display.println(F("scroll"));
+  display.display();      // Show initial text
+  delay(100);
+
+  // Scroll in various directions, pausing in-between:
+  display.startscrollright(0x00, 0x0F);
+  delay(2000);
+  display.stopscroll();
+  delay(1000);
+  display.startscrollleft(0x00, 0x0F);
+  delay(2000);
+  display.stopscroll();
+  delay(1000);
+  display.startscrolldiagright(0x00, 0x07);
+  delay(2000);
+  display.startscrolldiagleft(0x00, 0x07);
+  delay(2000);
+  display.stopscroll();
+  delay(1000);
+}
+
+void testdrawbitmap(void) {
+  display.clearDisplay();
+
+  display.drawBitmap(
+    (display.width()  - LOGO_WIDTH ) / 2,
+    (display.height() - LOGO_HEIGHT) / 2,
+    logo_bmp, LOGO_WIDTH, LOGO_HEIGHT, 1);
+  display.display();
+  delay(1000);
 }

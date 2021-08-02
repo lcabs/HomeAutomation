@@ -63,6 +63,7 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 //int         lasthumi = 10;                                    //initialize variable for last humidity
 //int         temp = 1;
 //int         humi = 2;
+int           y;
 long          lastReconnectAttempt = 0;                         // for the mqTT watchdog
 const int     buttonPin = PUSHBUTTON_PIN;                       // the pin that the pushbutton is attached to
 int           buttonPushCounter = 0;                            // counter for the number of button presses
@@ -266,6 +267,7 @@ void loop() {
   if (!mqttClient.connected()) {
     long now = millis();
     if (now - lastReconnectAttempt > 5000) {
+      Serial.println("// MQTT FAILED! ");
       lastReconnectAttempt = now;
       // Attempt to reconnect
       if (reconnect()) {
@@ -626,12 +628,28 @@ void pubTimestamp(char* outTopic){
       timestamp[8] =  '\0';
       myObj.chartimestamp[8] = timestamp[8];
 //      Serial.print("timestamp: ");
-//      Serial.println(timestamp);    
-      display.write(timestamp);
-      display.write("\n");
-      
+//      Serial.println(timestamp);
+
+      y = y  + (1*10);
+      if (y >= (6*10)){  
+      y = 10;
+      display.clearDisplay();
       display.display();
-      mqttClient.publish(outTopic, timestamp);  
+      }      
+//      screen1setup();
+      display.setCursor(0,0);
+      display.write("|Numero|   |Horario|");
+      display.display();
+      char cont[3];
+      itoa(PIR01.Counter,cont,10);
+      cont[3] = 0;
+      display.setCursor(0,y);
+      display.write("#");
+      display.write(cont);
+      display.write("          ");
+      display.write(timestamp);
+      display.display();
+      mqttClient.publish(outTopic, timestamp);      
 }
 /////////////////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////////////////
@@ -921,6 +939,7 @@ void loadingscreen(){
 void displaywrite(char txt[])
 {
   display.write(txt);
+  display.write("|");
   display.display();  
 }
 

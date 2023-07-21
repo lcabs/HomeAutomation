@@ -1,5 +1,18 @@
 # HomeAutomation
-Project for online monitoring and control of sensors and actuators in a house.
+O Arduino Mega serve como apoio à CPU Servidor do Home Assistant.
+-> Redundância de Ethernet. Em caso de CPU offline, ligar CPU com relé.
+-> Recebe dados MQTT e atualiza uma página web. 
+-> Recebe horário do servidor NTP
+-> Loga eventos num cartão SD. (online, offline, payloads)
+
+Página web:
+    Output: Ethernet status (connected)
+    Output: MQTT status (connected, disconnected)
+    Output: SD files
+    Output: Temperature
+    Output: Humidity
+    Output: Luminosity
+    Input: "Text"
 
 ///////// PINS
 #define BUZZER_PIN 53
